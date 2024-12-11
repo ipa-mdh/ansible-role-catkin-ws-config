@@ -1,0 +1,142 @@
+---
+# tasks file for catkin_ws_config
+- name: Check if profile exists
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin profile list --unformatted"
+  register: profile_string
+  tags: 
+    - config
+
+- name: Create catkin config profile
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin profile add {{profile_name}}"
+  when: not profile_string['stdout']| regex_search(profile_name)
+  tags: 
+    - config
+
+- name: Add cmake-args
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin config --profile {{profile_name}} --cmake-args {{cmake_args}}"
+  when: cmake_args
+  tags: 
+    - config
+
+- name: Remove cmake-args
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin config --profile {{profile_name}} --no-cmake-args"
+  when: not cmake_args
+  tags: 
+    - config
+
+- name: Enable release (install)
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin config --profile {{profile_name}} --install"
+  when: release
+  tags: 
+    - config
+
+- name: Disable release (no install)(devel)
+  ansible.builtin.command:
+    chdir: "{{workspace}}"
+    cmd: "catkin config --profile {{profile_name}} --no-install"
+  when: not release 
+  tags: 
+    - config
+
+#only change the source if this is the active profile
+- block:
+  - name: do not auto source processit
+    lineinfile:
+      path: ~/.bashrc
+      regexp: "^source {{ workspace }}"
+      state: absent
+    when: not auto_source
+
+  - name: auto source processit - devel #noinstall
+    lineinfile:
+      path: ~/.bashrc
+      line: source {{ workspace }}/devel/setup.bash --extend
+      regexp: "^source {{ workspace }}"
+      insertafter: "{{insertafter_regex}}"
+    when: not release and auto_source
+
+  - name: auto source processit - install
+    lineinfile:
+      path: ~/.bashrc
+      line: source {{ workspace }}/install/setup.bash --extend
+      regexp: "^source {{ workspace }}"
+      insertafter: "{{insertafter_regex}}"
+    when: release and auto_source
+  when: not separate_bashrc and set_active_profile
+  tags:
+      - config
+
+#if separate_bashrc: create separate bashrc file
+- block:
+  - name: create separate bashrc
+    ansible.builtin.file:
+      state: "touch"
+      path: "{{path_separate_bashrc}}"
+      mode: "0644"
+
+  - name: do not auto source processit (separate)
+    lineinfile:
+      path: "{{path_separate_bashrc}}"
+      regexp: "^source {{ workspace }}"
+      state: absent
+    when: not auto_source
+
+  - name: auto source processit - devel (separate) #noinstall
+    lineinfile:
+      path: "{{path_separate_bashrc}}"
+      line: source {{ workspace }}/devel/setup.bash --extend
+      regexp: "^source {{ workspace }}"
+      insertafter: "{{insertafter_regex}}"
+    when: not release and auto_source
+
+  - name: auto source processit - install (separate)
+    lineinfile:
+      path: "{{path_separate_bashrc}}"
+      line: source {{ workspace }}/install/setup.bash --extend
+      regexp: "^source {{ workspace }}"
+      insertafter: "{{insertafter_regex}}"
+    when: release and auto_source
+  
+  - name: add to bashrc
+    ansible.builtin.blockinfile:
+      path: ~/.bashrc
+      block: |
+        if [ -f {{path_separate_bashrc}} ]; then
+          . {{path_separate_bashrc}}
+        fi
+      insertafter: "{{insertafter_regex}}"
+  when: separate_bashrc and set_active_profile
+  tags:
+      - config
+
+- name: Apply changes in bashrc
+  ansible.builtin.shell:
+    cmd: "exec bash -c exit"
+  tags: config
+
+
+- name: Set profile
+  command:
+    chdir: "{{workspace}}"
+    cmd: " catkin profile set {{profile_name}}"
+  when : set_active_profile
+  tags: 
+    - config
+
+- name: Catkin build
+  command:
+    chdir: "{{workspace}}"
+    cmd: "catkin build"
+  when: build
+  tags: 
+    - config

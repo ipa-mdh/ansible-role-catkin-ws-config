@@ -1,0 +1,12 @@
+---
+# defaults file for catkin_ws_config
+workspace: "~/test_catkin"
+profile_name: "profile_test"
+cmake_args: ""
+release: False 
+set_active_profile: False
+auto_source: False
+build: False
+insertafter_regex: "EOF"
+separate_bashrc: False
+path_separate_bashrc: "~/.bashrc_{{workspace | basename}}"
